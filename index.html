@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tucker Auto Dealership</title>
+  <!-- need that sweet bootstrap CSS MAGIC BBY -->
+  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css"> -->
+  <link rel="stylesheet" href="js/bootstrap.css">
+  <!-- Our CSS Stylesheet! yay -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/typeaheadjs.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/flick/jquery-ui.css">
+</head>
+<body>
+  <!-- load some external scripts! -->
+  <script src="js/jquery.js"></script>
+  <script src="js/jquery-ui.min.js"></script>
+  <script src="js/underscore.js"></script>
+  <script src="js/backbone-min.js"></script>
+  <script src="js/backbone.marionette.min.js"></script>
+  <script src="js/moment.min.js"></script>
+  <script src="js/ractive.min.js"></script>
+  <script src="js/ractive-adaptors-backbone.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
+  <!-- Parsley for form validation -->
+  <script src="js/parsley.min.js"></script>
+  <script src="js/typeahead.bundle.min.js"></script>
+
+  <!-- The base element of everything single page app up in here -->
+  <div id="content" class="page-fluid"></div>
+
+    <div class="modal" id="customer-data-modal">
+      <div class="modal-dialog">
+	<div class="modal-content">
+	  <div class="modal-header">
+	    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">x</button>
+	    <h4 class="modal-title" id="customer-data-modal-title">asdf</h4>
+	  </div>
+	  <div class="modal-body" id="customer-data-modal-body">
+	    asdf
+	  </div>
+	  <div class="modal-footer">
+	    <button type="button" class="btn btn-default" data-dismiss="modal" id="customer-data-modal-ok">Close</button>
+	  </div>
+	</div>
+      </div>
+    </div>
+
+  <!-- PARSLEY DATETIME VALIDATOR -->
+  <script>
+    window.ParsleyValidator
+          .addValidator('date', function(value, requirement) {
+            return moment(value).isValid();
+          }, 32)
+          .addMessage('en', 'date', 'This needs to be an actual date');
+  </script>
+  <!-- END PARSLEY DATETIME VALIDATOR -->
+
+  <!-- CURRENCY FORMATTER -->
+  <script>
+    <!-- From: http://stackoverflow.com/questions/149055/how-can-i-format-numbers-as-money-in-javascript -->
+    Number.prototype.format = function(n, x) {
+      var re = '\\d(?=(\\d{' + (x || 3) + '})+' + (n > 0 ? '\\.' : '$') + ')';
+      return this.toFixed(Math.max(0, ~~n)).replace(new RegExp(re, 'g'), '$&,');
+    };
+  </script>
+  <!-- END CURRENCY FORMATTER -->
+
+  <!-- BACKBONE MODELS -->
+  <script>
+    window.API = "restful.php";
+    var CustomerModel = Backbone.Model.extend({
+      idAttribute: 'CustomerID',
+
+      urlRoot: window.API + '/customer'
+    });
+
+    var CustomerCollection = Backbone.Collection.extend({
+      model: CustomerModel,
+      url: function() {
+        return window.API + '/customer';
+      }
+    });
+
+    var CarModel = Backbone.Model.extend({
+      idAttribute: 'CarID',
+
+      urlRoot: window.API + '/car'
+    });
+
+    var CarCollection = Backbone.Collection.extend({
+      model: CarModel,
+      url: function() {
+        return window.API + '/car';
+      }
+    });
+  </script>
+
+  <!-- END BACKBONE MODELS -->
+
+  <!-- RACTIVE TEMPLATES -->
+
+  <script>
+    <!-- Support different navigation for each user -->
+    window.nav = [
+      {
+        'name': 'Inventory Staff',
+        'nav': [
+          {
+            'url': '#new-car',
+            'text': 'New Car'
+          },
+          {
+            'url': '#car-report',
+            'text': 'Inventory Report'
+          }
+        ]
+      },
+      {
+        'name': 'Finance Manager',
+        'nav': [
+          {
+            'text': 'Customer Accounts',
+            'dropdown': true,
+            'menu': [
+              {
+                'url': '#customer-new',
+                'text': 'New Account'
+              },
+              {
+                'url': '#customer-edit',
+                'text': 'Update Account'
+              }
+            ]
+          }
+        ]
+      }
+    ];
+    window.getNav = function() {
+      for (var i = 0; i < nav.length; i++) {
+        if (nav[i].name == window.user) {
+          return nav[i].nav;
+        }
+      }
+    };
+  </script>
+
+  <script id="template-ractive-index" type="text/ractive">
+    <div class="text-center" style="margin: 40px">
+      <img src="./logo.png">
+    </div>
+    <form id="login-form" class="form-signin">
+      <fieldset>
+      <legend>{{#if loggedIn}}Logged out{{else}}Login{{/if}}</legend>
+      <select class="form-control" id="login-user">
+        {{#each actors}}
+        <option>{{name}}</option>
+        {{/each}}
+      </select>
+      <input type="password" id="login-password" class="form-control" placeholder="Password">
+      <button class="btn btn-primary btn-block" id="login-btn" type="submit">Login</button>
+      </fieldset>
+    </form>
+
+  </script>
+
+  <script id="template-ractive-loggedin" type="text/ractive">
+    <div id="header"></div>
+    <div idp="body"></div>
+  </script>
+
+  <script id="template-ractive-header" type="text/ractive">
+    <nav class="navbar navbar-default main-navigation" role="navigation">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#home"><img src="logo_white.png" height="25px" style="display: inline;">&nbsp;Tucker Auto Dealership</a>
+        </div>
+
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+          <ul class="nav navbar-nav">
+            {{#each headers}}
+            {{#if dropdown}}
+            <li class="dropdown">
+              <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">{{text}}<span class="caret"></span></a>
+              <ul class="dropdown-menu" role="menu">
+                {{#each menu}}
+                <li><a href="{{url}}">{{text}}</a></li>
+                {{/each}}
+              </ul>
+            </li>
+            {{else}}
+            <li>
+              <a href="{{url}}">{{text}}</a>
+            </li>
+            {{/if}}
+            {{/each}}
+          </ul>
+          <ul class="nav navbar-nav navbar-right">
+            <li id="logout"><a href="#">Logout ({{user}})</li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+  </script>
+
+  <script id="template-ractive-loggedin-body" type="text/ractive">
+    <a href="#">Logout ({{user}})</a>
+  </script>
+
+  <script id="template-ractive-customer-data" type="text/ractive">
+    {{#if Hide}}
+    {{else}}
+    <form class="form-horizontal" id="form-customer-data">
+      <fieldset>
+	<div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>First Name</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>Middle</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>Last</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-4 form-error">
+            <input type="text" class="form-control" placeholder="First" id="FirstName" value="{{customer.FirstName}}" required>
+          </div>
+	  <div class="col-xs-4 form-error">
+	    <input type="text" class="form-control" placeholder="Middle" id="MiddleName" value="{{customer.MiddleName}}">
+	  </div>
+          <div class="col-xs-4 form-error">
+            <input type="text" class="form-control" placeholder="Last" id="LastName" value="{{customer.LastName}}" required>
+          </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-12">
+            <strong>Address</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-12 form-error">
+            <input type="text" class="form-control" placeholder="Street Address" id="StreetAddress" value="{{customer.StreetAddress}}" required>
+          </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>City</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>State</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>Zip</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-4 form-error">
+            <input type="text" class="form-control" placeholder="City" id="City" value="{{customer.City}}" required>
+          </div>
+          <div class="col-xs-4 form-error">
+            <select id="State" size="1" class="form-control">
+              {{#each states}}
+	      <option {{#if customer.State == abbreviation}}selected {{/if}}value="{{abbreviation}}">{{abbreviation}}</option>
+              {{/each}}
+            </select>
+          </div>
+          <div class="col-xs-4 form-error">
+            <input type="text" class="form-control" placeholder="Zip" id="ZipCode" value="{{customer.ZipCode}}" required>
+          </div>
+        </div>
+        <div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>Phone</strong>
+	  </div>
+	  <div class="col-xs-8">
+            <strong>Email</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-4 form-error">
+            <input type="text" class="form-control" placeholder="xxxxxxxxxx" id="PhoneNumber" value="{{customer.PhoneNumber}}" required data-parsley-pattern="^\d{10}$">
+          </div>
+          <div class="col-xs-8 form-error">
+            <input type="email" class="form-control" id="Email" value="{{customer.Email}}" required data-parsley-trigger="change" placeholder="example@example.com">
+          </div>
+        </div>
+        <div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>Notes</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-12 form-error">
+            <textarea class="form-control" rows="5" id="Notes" value="{{customer.Notes}}" placeholder="You have no notes yet...">
+		  </div>
+        </div>
+      </fieldset>
+    </form>
+    {{/if}}
+  </script>
+
+  <script id="template-ractive-customer-list" type="text/ractive">
+    <strong>Selected Customer</strong>
+    <select class="form-control" on-click="selected" id="customer-to-edit">
+    {{#each customers}}
+    <option value="{{CustomerID}}">{{FirstName}}, {{LastName}}</option>
+    {{/each}}
+    </select>
+  </script>
+
+  <script id="template-ractive-new-car" type="text/ractive">
+    <form class="form-horizontal" id="form-new-car">
+      <fieldset>
+	<div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>Type</strong>
+	  </div>
+	  <div class="col-xs-8">
+            <strong>VIN</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-4 form-error">
+	    <select class="form-control" id="car-type" value="{{Type}}" required>
+	      <option selected value="new">New</option>
+	      <option value="used">Used</option>
+	    </select>
+          </div>
+          <div class="col-xs-8 form-error">
+            <input type="text" class="form-control" placeholder="VIN" id="car-vin" value="{{vin}}" required data-parsley-trigger="change" data-parsley-pattern="^[a-zA-Z\d]{17}$">
+          </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-4">
+            <strong>Make</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>Model</strong>
+	  </div>
+	  <div class="col-xs-4">
+            <strong>Year</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-4 form-error">
+	    <select class="form-control" id="car-make" value="{{Make}}" required>
+	      {{#if Manufacturer}}
+	      {{#each newMakes}}
+	        <option value="{{name}}">{{name}}</option>
+	      {{/each}}
+              {{else}}
+	      {{#each usedMakes}}
+	        <option value="{{name}}">{{name}}</option>
+	      {{/each}}
+	      {{/if}}
+	    </select>
+          </div>
+          <div class="col-xs-4 form-error">
+	    <select class="form-control" {{#if !models}}disabled{{/if}} id="car-model" required>
+	      {{#if models}}
+	      {{#each models}}
+	        <option value="{{.}}">{{.}}</option>
+	      {{/each}}
+              {{/if}}
+	    </select>
+          </div>
+	  <div class="col-xs-4 form-error">
+	    {{#if Manufacturer}}
+	    <input type="text" class="form-control" placeholder="Year" id="car-year" value="2015" required>
+	    {{else}}
+	    <input type="text" class="form-control" placeholder="Year" id="car-year" required>
+	    {{/if}}
+	  </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-6">
+            <strong>Exterior Color</strong>
+	  </div>
+	  <div class="col-xs-6">
+            <strong>Interior Color</strong>
+	  </div>
+	</div>
+        <div class="row row-list form-error">
+          <div class="col-xs-6">
+            <input type="text" class="form-control" placeholder="Exterior" id="car-exterior" value="{{ExteriorColor}}" required>
+          </div>
+          <div class="col-xs-6">
+            <input type="text" class="form-control" placeholder="Interior" id="car-interior" value="{{InteriorColor}}" required>
+          </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-6">
+	    <strong>Dealer Cost</strong>
+	  </div>
+	  <div class="col-xs-6">
+	    <strong>Sell Price</strong>
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-6 form-error">
+            <input type="text" class="form-control" id="car-dealer-price" placeholder="Dealer cost" required data-parsley-type="digits">
+          </div>
+          <div class="col-xs-6 form-error">
+            <input type="text" class="form-control" placeholder="Over $9000" id="car-sell-price" required data-parsley-type="digits">
+          </div>
+        </div>
+	<div class="row row-list">
+	  <div class="col-xs-6">
+	    <strong>Acquired Date</strong>
+	  </div>
+	  <div class="col-xs-6">
+	    {{#if Manufacturer}}
+	    <strong>Manufactured Date</strong>
+	    {{else}}
+	    <strong>Mileage</strong>
+	    {{/if}}
+	  </div>
+	</div>
+        <div class="row row-list">
+          <div class="col-xs-6 form-error">
+            <input type="text" class="form-control" placeholder="mm/dd/yyyy" id="car-acquired-date" required data-parsley-date>
+          </div>
+          <div class="col-xs-6 form-error">
+	    {{#if Manufacturer}}
+            <input type="text" class="form-control" placeholder="mm/dd/yyyy" id="car-manufactured-date" required data-parsley-date>
+	    {{else}}
+	    <input type="text" class="form-control" id="car-mileage" required>
+	    {{/if}}
+          </div>
+        </div>
+	<h3>Options</h3>
+	{{#if combos}}
+	{{#combos}}
+	<div class="row row-list">
+	  <div class="col-xs-12">
+	    <strong>{{text}}</strong>
+	  </div>
+	</div>
+	<div class="row row-list">
+	  <div class="col-xs-6">
+	    <select id="{{id}}" class="form-control">
+	      {{#content}}
+	      <option value="{{.}}">{{.}}</option>
+	      {{/}}
+	    </select>
+	  </div>
+	</div>
+	{{/}}
+	{{/if}}
+	{{#if pages}}
+	<div class="row row-list">
+	  <div class="col-xs-12">
+	    <ul class="nav nav-tabs">
+	      {{#each pages}}
+	      <li class=""><a href="#{{id}}" data-toggle="tab" aria-expanded="false">{{text}}</a></li>
+	      {{/each}}
+	    </ul>
+	    <div id="myTabContent" class="tab-content">
+	      {{#each pages}}
+	      <div class="tab-pane fade" id="{{id}}">
+		<ul>
+		  {{#each content}}
+		  <li style="display: inline; list-style:none;">
+		    <div class="col-xs-6">
+		      <div style="float: left;">
+			<input type="checkbox" id="{{id}}" value="{{enabled}}">
+		      </div>
+		      <div style="display: inline"><p>{{text}}</p></div>
+		    </div>
+		  </li>
+		  {{/each}}
+		</ul>
+	      </div>
+	      {{/each}}
+	    </div>
+	  </div>
+	</div>
+	{{/if}}
+      </fieldset>
+    </form>
+  </script>
+
+  <script id="template-ractive-generate-car-report" type="text/ractive">
+    <form class="form-horizontal" id="form-generate-car">
+      <div class="row row-list">
+	<div class="col-xs-2">
+	  <strong>Type</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <select class="form-control" value="{{Type}}" id="car-type">
+	    <option value="new">New</option>
+	    <option value="used">Used</option>
+	  </select>
+	</div>
+      </div>
+      <div class="row row-list">
+          <h5>Optional Generation Parameters</h5>
+      </div>
+      <div class="row row-list">
+	{{#if Type == "new"}}
+	<div class="col-xs-10">
+	  <strong>Manufacturer Date</strong>
+	</div>
+	{{else}}
+	<div class="col-xs-10">
+	  <strong>Mileage</strong>
+	</div>
+	{{/if}}
+      </div>
+      <div class="row row-list">
+      {{#if Type == "new"}}
+	<div class="col-xs-4">
+	  <select id="car-manufacturer-select" class="form-control" value="{{ManuType}}">
+	    <option value="lte">Before</option>
+	    <option value="gte">After</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if ManuType == "gte" || ManuType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-manufacturer-date-from" placeholder="mm/dd/yyyy"data-parsley-date value="{{ManuFrom}}">
+	</div>
+	{{/if}}
+	{{#if ManuType == "lte" || ManuType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-manufacturer-date-to" placeholder="mm/dd/yyyy" data-parsley-date value="{{ManuTo}}">
+	</div>
+	{{/if}}
+      {{else}}
+	<div class="col-xs-4">
+	  <select id="car-mileage-select" class="form-control" value="{{MileageType}}">
+	    <option value="lte">Under</option>
+	    <option value="gte">Over</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if MileageType == "gte" || MileageType == "between"}}
+      	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-mileage-from" placeholder="# of miles" data-parsley-type="digits" value="{{MileageFrom}}">
+	</div>
+	{{/if}}
+	{{#if MileageType == "lte" || MileageType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-mileage-to" placeholder="# of miles" data-parsley-type="digits" value="{{MileageTo}}">
+	</div>
+	{{/if}}
+      {{/if}}
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-12">
+	  <strong>Acquired Date</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <select id="car-acquired-select" class="form-control" value="{{AcquiredType}}">
+	    <option value="lte">Before</option>
+	    <option value="gte">After</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if AcquiredType == "gte" || AcquiredType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-acquired-date-from" placeholder="mm/dd/yyyy" data-parsley-date value="{{AcquiredFrom}}">
+	</div>
+	{{/if}}
+	{{#if AcquiredType == "lte" || AcquiredType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-acquired-date-to" placeholder="mm/dd/yyyy" data-parsley-date value="{{AcquiredTo}}">
+	</div>
+	{{/if}}
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <strong>Dealer Cost</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <select id="car-dealer-select" class="form-control" value="{{DealerType}}">
+	    <option value="lte">Less than</option>
+	    <option value="gte">Greater than</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if DealerType == "gte" || DealerType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-dealer-cost-from" placeholder="xxxxxx.xx" data-parsley-type="digits" value="{{DealerFrom}}">
+	</div>
+	{{/if}}
+	{{#if DealerType == "lte" || DealerType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-dealer-cost-to" placeholder="xxxxxx.xx" data-parsley-type="digits" value="{{DealerTo}}">
+	</div>
+	{{/if}}
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <strong>List Price</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <select id="car-list-select" class="form-control" value="{{ListType}}">
+	    <option value="lte">Less than</option>
+	    <option value="gte">Greater than</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if ListType == "gte" || ListType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-sell-price-from" placeholder="xxxxxx.xx" data-parsley-type="digits" data-parsley-lte="#car-sell-price-to" data-parsley-gt="0" value="{{CarFrom}}">
+	</div>
+	{{/if}}
+	{{#if ListType == "lte" || ListType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-sell-price-to" placeholder="xxxxxx.xx" data-parsley-type="digits" data-parsley-gte="#car-sell-price-from" value="{{CarTo}}">
+	</div>
+	{{/if}}
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <strong>Year</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <select id="car-year-select" class="form-control" value="{{YearType}}">
+	    <option value="lte">Before</option>
+	    <option value="gte">After</option>
+	    <option value="between">Between</option>
+	  </select>
+	</div>
+	{{#if YearType == "gte" || YearType == "between"}}
+  	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-year-from" placeholder="yyyy" data-parsley-type="digits" data-parsley-lte="#car-year-to" data-parsley-gt="0" value="{{YearFrom}}">
+	</div>
+	{{/if}}
+	{{#if YearType == "lte" || YearType == "between"}}
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-year-to" placeholder="yyyy" data-parsley-type="digits" data-parsley-gte="#car-dealer-price-from" value="{{YearTo}}">
+	</div>
+	{{/if}}
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <strong>Make</strong>
+	</div>
+	<div class="col-xs-4">
+	  <strong>Model</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+  	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-make" placeholder="Make" value="{{Make}}">
+	</div>
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-model" placeholder="Model" value="{{Model}}">
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4">
+	  <strong>Exterior Color</strong>
+	</div>
+	<div class="col-xs-4">
+	  <strong>Interior Color</strong>
+	</div>
+      </div>
+      <div class="row row-list">
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-exterior-color" placeholder="Exterior Color" value="{{ExteriorColor}}">
+	</div>
+	<div class="col-xs-4 form-error">
+          <input type="text" class="form-control" id="car-interior-color" placeholder="Interior Color" value="{{InteriorColor}}">
+	</div>
+      </div>
+    </form>
+  </script>
+
+  <script id="template-ractive-generated-car-report" type="text/ractive">
+    <table class="table table-striped table-hover">
+      <thead>
+	<tr>
+	  <th class="col-xs-1" on-click='sort:Make'>Make{{#if sortColumn === "Make"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:Model'>Model{{#if sortColumn === "Model"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:Year'>Year{{#if sortColumn === "Year"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:VIN'>VIN{{#if sortColumn === "VIN"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:ExteriorColor'>Exterior{{#if sortColumn === "ExteriorColor"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:InteriorColor'>Interior{{#if sortColumn === "InteriorColor"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  {{#if NewCar}}
+	  <th class="col-xs-1" on-click='sort:ManufacturedDate'>Mfg Date{{#if sortColumn === "ManufacturedDate"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  {{else}}
+	  <th class="col-xs-1" on-click='sort:Mileaeg'>Mileage{{#if sortColumn === "Mileage"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  {{/if}}
+	  <th class="col-xs-1" on-click='sort:AcquiredDate'>Acquired{{#if sortColumn === "AcquiredDate"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:SellPrice'>List{{#if sortColumn === "SellPrice"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:DealerCost'>Cost{{#if sortColumn === "DealerCost"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:Status'>Status{{#if sortColumn === "Status"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	  <th class="col-xs-1" on-click='sort:Location'>Location{{#if sortColumn === "Location"}}<span class="glyphicon glyphicon-chevron-{{#if sortOrder == "up"}}up{{else}}down{{/if}}" aria-hidden="true" style="display: inline;"></span>{{/if}}</th>
+	</tr>
+      </thead>
+      <tbody>
+	{{#each Cars}}
+	{{#if hide}}
+	{{else}}
+	<tr>
+	  <td>{{Make}}</td>
+	  <td>{{Model}}</td>
+	  <td>{{Year}}</td>
+	  <td>{{VIN}}</td>
+	  <td>{{ExteriorColor}}</td>
+	  <td>{{InteriorColor}}</td>
+	  {{#if NewCar}}
+	  <td>{{ManufacturedDateString}}</td>
+	  {{else}}
+	  <td>{{Mileage}}</td>
+	  {{/if}}
+	  <td>{{AcquiredDateString}}</td>
+	  <td class="text-right">{{SellPriceFormatted}}</td>
+	  <td class="text-right">{{DealerCostFormatted}}</td>
+	  <td>{{Status}}</td>
+	  <td>{{Location}}</td>
+	</tr>
+	{{/if}}
+	{{/each}}
+      </tbody>
+    </table>
+  </script>
+
+  <!-- END RACTIVE TEMPLATES -->
+
+  <!-- RACTIVE VIEWS -->
+
+  <script>
+    var RactiveIndex = Ractive.extend({
+      el: '#indexPage',
+      template: '#template-ractive-index',
+      computed: {
+        actors: function() {
+          return window.nav;
+        },
+        loggedIn: function() {
+          return window.loggedIn;
+        }
+      }
+    });
+
+    var RactiveHeader = Ractive.extend({
+      el: '#header',
+      template: '#template-ractive-header',
+      computed: {
+        headers: function() {
+          return window.getNav();
+        },
+        user: function() {
+          return window.user;
+        }
+      }
+    });
+
+    var RactiveLoggedIn = Ractive.extend({
+      el: '#logout',
+      template: '#template-ractive-loggedin-body'
+    });
+
+    var RactiveCustomerData = Ractive.extend({
+      el: '#customer-data',
+      template: '#template-ractive-customer-data',
+      adapt: ['Backbone'],
+      data: {
+        states: [
+<!-- taken from http://xpagesbeast.com/uxdesign/json-list-of-states-for-javascript/ -->
+    { "name": "Alabama", "abbreviation": "AL"},
+    { "name": "Alaska", "abbreviation": "AK"},
+    { "name": "American Samda", "abbreviation": "AS"},
+    { "name": "Arizona", "abbreviation": "AZ"},
+    { "name": "Arkansas", "abbreviation": "AR"},
+    { "name": "California", "abbreviation": "CA"},
+    { "name": "Colorado", "abbreviation": "CO"},
+    { "name": "Connecticut", "abbreviation": "CT"},
+    { "name": "Delaware", "abbreviation": "DE"},
+    { "name": "District Of Columbia", "abbreviation": "DC"},
+    { "name": "Federated States of Micronesia", "abbreviation": "FM"},
+    { "name": "Florida", "abbreviation": "FL"},
+    { "name": "Georgia", "abbreviation": "GA"},
+    { "name": "Guam", "abbreviation": "GU"},
+    { "name": "Hawaii", "abbreviation": "HI"},
+    { "name": "Idaho", "abbreviation": "ID"},
+    { "name": "Illinois", "abbreviation": "IL"},
+    { "name": "Indiana", "abbreviation": "IN"},
+    { "name": "Iowa", "abbreviation": "IA"},
+    { "name": "Kansas", "abbreviation": "KS"},
+    { "name": "Kentucky", "abbreviation": "KY"},
+    { "name": "Louisiana", "abbreviation": "LA"},
+    { "name": "Maine", "abbreviation": "ME"},
+    { "name": "Marshall Islands", "abbreviation": "MH"},
+    { "name": "Maryland", "abbreviation": "MD"},
+    { "name": "Massachusetts", "abbreviation": "MA"},
+    { "name": "Michigan", "abbreviation": "MI"},
+    { "name": "Minnesota", "abbreviation": "MN"},
+    { "name": "Mississippi", "abbreviation": "MS"},
+    { "name": "Missouri", "abbreviation": "MO"},
+    { "name": "Montana", "abbreviation": "MT"},
+    { "name": "Nebraska", "abbreviation": "NE"},
+    { "name": "Nevada", "abbreviation": "NV"},
+    { "name": "New Hampshire", "abbreviation": "NH"},
+    { "name": "New Jersey", "abbreviation": "NJ"},
+    { "name": "New Mexico", "abbreviation": "NM"},
+    { "name": "New York", "abbreviation": "NY"},
+    { "name": "North Carolina", "abbreviation": "NC"},
+    { "name": "North Dakota", "abbreviation": "ND"},
+    { "name": "Northern Mariana Islands", "abbreviation": "MP"},
+    { "name": "Ohio", "abbreviation": "OH"},
+    { "name": "Oklahoma", "abbreviation": "OK"},
+    { "name": "Oregon", "abbreviation": "OR"},
+    { "name": "Palau", "abbreviation": "PW"},
+    { "name": "Pennsylvania", "abbreviation": "PA"},
+    { "name": "Puerto Rico", "abbreviation": "PR"},
+    { "name": "Rhode Island", "abbreviation": "RI"},
+    { "name": "South Carolina", "abbreviation": "SC"},
+    { "name": "South Dakota", "abbreviation": "SD"},
+    { "name": "Tennessee", "abbreviation": "TN"},
+    { "name": "Texas", "abbreviation": "TX"},
+    { "name": "Utah", "abbreviation": "UT"},
+    { "name": "Vermont", "abbreviation": "VT"},
+    { "name": "Virgin Islands", "abbreviation": "VI"},
+    { "name": "Virginia", "abbreviation": "VA"},
+    { "name": "Washington", "abbreviation": "WA"},
+    { "name": "West Virginia", "abbreviation": "WV"},
+    { "name": "Wisconsin", "abbreviation": "WI"},
+    { "name": "Wyoming", "abbreviation": "WY" }
+        ]
+      }
+    });
+
+    var RactiveCustomerList = Ractive.extend({
+      el: '#customer-list',
+      template: '#template-ractive-customer-list',
+      adapt: [ 'Backbone' ]
+    });
+
+    var RactiveNewCar = Ractive.extend({
+      el: '#car-data',
+      template: '#template-ractive-new-car',
+      <!--adapt: ['Backbone']-->
+      data: {
+                newMakes: [
+          {
+            name: ' Buick',
+            models: [
+              'Enclave',
+              'Encore',
+              'LaCrosse',
+              'Regal',
+              'Verano'
+            ]
+          }
+        ],
+        usedMakes: [
+          {
+            name: 'Audi',
+            models: [
+              '100',
+              '200',
+              '4000',
+              '4000CS Quattro',
+              '4000s',
+              '4000s Quattro',
+              '5000CS',
+              '5000CS Quattro',
+              '5000S',
+              '80',
+              '80/90',
+              '90',
+              'A3',
+              'A4',
+              'A5',
+              'A6',
+              'A7',
+              'A8',
+              'Allroad',
+              'Cabriolet',
+              'Coupe GT',
+              'Coupe Quattro',
+              'Q5',
+              'Q7',
+              'Quattro',
+              'R8',
+              'riolet',
+              'RS 4',
+              'RS 6',
+              'RS4',
+              'RS6',
+              'S4',
+              'S5',
+              'S6',
+              'S8',
+              'TT',
+              'V8'
+            ]
+          },
+          {
+            name: 'BMW',
+            models: [
+              '1 Series',
+              '3 Series',
+              '325',
+              '330',
+              '5 Series',
+              '525',
+              '530',
+              '545',
+              '550',
+              '6 Series',
+              '600',
+              '645',
+              '650',
+              '7 Series',
+              '745',
+              '750',
+              '760',
+              '8 Series',
+              'Alpina B7',
+              'M',
+              'M Roadster',
+              'M3',
+              'M5',
+              'M6',
+              'X3',
+              'X5',
+              'X5 M',
+              'X6',
+              'X6 M',
+              'Z3',
+              'Z4',
+              'Z4 M',
+              'Z4 M Roadster',
+              'Z8'
+            ]
+          },
+          {
+            name: 'Buick',
+            models: [
+              'Century',
+              'Coachbuilder',
+              'Electra',
+              'Enclave',
+              'Estate',
+              'Hearse',
+              'LaCrosse',
+              'LeSabre',
+              'Lucerne',
+              'Park Avenue',
+              'Rainier',
+              'Reatta',
+              'Regal',
+              'Rendezvous',
+              'Riviera',
+              'Roadmaster',
+              'Skyhawk',
+              'Skylark',
+              'Somerset',
+              'Special',
+              'Terraza',
+              'Verano'
+            ]
+          },
+          {
+            name: 'Chevrolet',
+            models: [
+              '1500',
+              '2500',
+              '3500',
+              'APV',
+              'Astro',
+              'Avalanche',
+              'Avalanche 1500',
+              'Avalanche 2500',
+              'Aveo',
+              'Bel Air',
+              'Beretta',
+              'Blazer',
+              'Camaro',
+              'Caprice',
+              'Caprice Classic',
+              'Cavalier',
+              'Citation',
+              'Classic',
+              'Cobalt',
+              'Cobalt SS',
+              'Colorado',
+              'Corsica',
+              'Corvair',
+              'Corvair 500',
+              'Corvette',
+              'Cruze',
+              'Equinox',
+              'Express',
+              'Express 1500',
+		      'Express 2500',
+			  'Express 3500',
+			  'G-Series 1500',
+			  'G-Series 2500',
+			  'G-Series 3500',
+			  'G-Series G10',
+			  'G-Series G20',
+			  'G-Series G30',
+			  'HHR',
+			  'HHR Panel',
+			  'Impala',
+			  'Impala SS',
+			  'K5 Blazer',
+			  'Lumina',
+			  'Lumina APV',
+			  'LUV',
+			  'Malibu',
+			  'Malibu Maxx',
+			  'Metro',
+			  'Monte Carlo',
+			  'Monza',
+			  'Prizm',
+			  'S10',
+			  'S10 Blazer',
+			  'Silverado',
+			  'Silverado 1500',
+			  'Silverado 2500',
+			  'Silverado 3500',
+			  'Silverado 3500HD',
+			  'Silverado Hybrid',
+			  'Sonic',
+			  'Sportvan G10',
+			  'Sportvan G20',
+			  'Sportvan G30',
+			  'SSR',
+			  'Suburban',
+			  'Suburban 1500',
+			  'Suburban 2500',
+			  'Tahoe',
+			  'Tracker',
+			  'TrailBlazer',
+			  'Traverse',
+			  'Uplander',
+			  'Vega',
+			  'Venture',
+			  'Volt'
+            ]
+          },
+          {
+            name: 'Honda',
+            models: [
+		        'Accord',
+		        'Accord Crosstour',
+				'Civic',
+				'Civic GX',
+				'Civic Si',
+				'CR-V',
+				'CR-X',
+				'CR-Z',
+				'Crosstour',
+				'del Sol',
+				'Element',
+				'FCX Clarity',
+				'Fit',
+				'Insight',
+				'Odyssey',
+				'Passport',
+				'Pilot',
+				'Prelude',
+				'Ridgeline',
+				'S2000'
+            ]
+          },
+          {
+            name: 'Isuzu',
+            models: [
+				'Amigo',
+				'Ascender',
+				'Axiom',
+				'Hombre',
+				'Hombre Space',
+				'i-280',
+				'i-290',
+				'i-350',
+				'i-370',
+				'i-Series',
+				'Impulse',
+				'Oasis',
+				'Rodeo',
+				'Rodeo Sport',
+				'Space',
+				'Stylus',
+				'Trooper',
+				'VehiCROSS'
+            ]
+          },
+          {
+            name: 'Jeep',
+            models: [
+				'Cherokee',
+                'Comanche',
+                'Commander',
+                'Compass',
+                'Grand Cherokee',
+                'Liberty',
+                'Patriot',
+                'Wrangler'
+            ]
+          },
+          {
+            name: 'Kia',
+            models: [
+				'Amanti',
+				'Borrego',
+				'Carens',
+				'Forte',
+				'Mentor',
+				'Mohave/Borrego',
+				'Optima',
+				'Rio',
+				'Rio5',
+				'Rondo',
+				'Sedona',
+				'Sephia',
+				'Sorento',
+				'Soul',
+				'Spectra',
+				'Spectra5',
+				'Sportage'
+            ]
+          },
+          {
+            name: 'Lexus',
+            models: [
+				'CT',
+				'ES',
+				'GS',
+				'GX',
+				'HS',
+				'IS',
+				'IS F',
+				'IS-F',
+				'LFA',
+				'LS',
+				'LS Hybrid',
+				'LX',
+				'RX',
+				'RX Hybrid',
+				'SC'
+            ]
+          },
+          {
+            name: 'Mini',
+            models: [
+				'Clubman',
+				'Cooper',
+				'Cooper Clubman',
+				'Cooper Countryman',
+				'Countryman',
+				'MINI'
+            ]
+          },
+          {
+            name: 'Nissan',
+            models: [
+				'200SX',
+				'240SX',
+				'280ZX',
+				'300ZX',
+				'350Z',
+				'350Z Roadster',
+				'370Z',
+				'Altima',
+				'Armada',
+				'cube',
+				'Datsun/Nissan Z-car',
+				'Frontier',
+				'GT-R',
+				'JUKE',
+				'Leaf',
+				'Maxima',
+				'Murano',
+				'NV1500',
+				'NV2500',
+				'NV3500',
+				'NX',
+				'Pathfinder',
+				'Pathfinder Armada',
+				'Quest',
+				'Rogue',
+				'Sentra',
+				'Stanza',
+				'Titan',
+				'Versa',
+				'Xterra'
+            ]
+          },
+          {
+            name: 'Oldsmobile',
+            models: [
+				'88',
+				'98',
+				'Achieva',
+				'Alero',
+				'Aurora',
+				'Bravada',
+				'Ciera',
+				'Custom Cruiser',
+				'Cutlass',
+				'Cutlass Cruiser',
+				'Cutlass Supreme',
+				'Intrigue',
+				'LSS',
+				'Regency',
+				'Silhouette',
+				'Toronado'
+            ]
+          },
+          {
+            name: 'Porsche',
+            models: [
+				'911',
+				'914',
+				'924',
+				'924 S',
+				'928',
+				'944',
+				'968',
+				'Boxster',
+				'Carrera GT',
+				'Cayenne',
+				'Cayman',
+				'Panamera'
+            ]
+          },
+          {
+            name: 'Pontiac',
+            models: [
+				'1000',
+				'6000',
+				'Aztek',
+				'Bonneville',
+				'Chevette',
+				'Daewoo Kalos',
+				'Fiero',
+				'Firebird',
+				'Firebird Formula',
+				'Firebird Trans Am',
+				'Firefly',
+				'G3',
+				'G5',
+				'G6',
+				'G8',
+				'Gemini',
+				'Grand Am',
+				'Grand Prix',
+				'Grand Prix Turbo',
+				'GTO',
+				'LeMans',
+				'Montana',
+				'Montana SV6',
+				'Monterey',
+				'Parisienne',
+                'Safari',
+				'Solstice',
+				'Sunbird',
+				'Sunfire',
+				'Tempest',
+				'Torrent',
+				'Trans Sport',
+				'Turbo Firefly',
+				'Vibe'
+            ]
+          },
+          {
+            name: 'Rolls-Royce',
+            models: [
+				'Ghost',
+                'Phantom'
+            ]
+          },
+          {
+            name: 'Saturn',
+            models: [
+				'Astra',
+				'Aura',
+				'Ion',
+				'L-Series',
+				'Outlook',
+				'Relay',
+				'S-Series',
+				'Sky',
+				'VUE'
+            ]
+          },
+          {
+            name: 'Tesla',
+            models: [
+				'Model S'
+            ]
+          },
+          {
+            name: 'Toyota',
+            models: [
+				'4Runner',
+				'Avalon',
+				'Camry',
+				'Camry Hybrid',
+				'Camry Solara',
+				'Celica',
+				'Corolla',
+				'Cressida',
+				'Echo',
+				'FJ Cruiser',
+				'Highlander',
+				'Highlander Hybrid',
+				'Ipsum',
+				'Land Cruiser',
+				'Matrix',
+				'MR2',
+				'Paseo',
+				'Previa',
+				'Prius',
+				'Prius c',
+				'Prius Plug-in',
+				'Prius Plug-in Hybrid',
+				'Prius v',
+				'RAV4',
+				'Sequoia',
+				'Sienna',
+				'Solara',
+				'Supra',
+				'T100',
+				'T100 Xtra',
+				'Tacoma',
+				'Tacoma Xtra',
+				'Tercel',
+				'Truck Xtracab SR5',
+				'Tundra',
+				'TundraMax',
+				'Venza',
+				'Xtra',
+				'Yaris'
+            ]
+          },
+          {
+            name: 'Volvo',
+            models: [
+				'240',
+				'740',
+				'850',
+				'940',
+				'960',
+				'C30',
+				'C70',
+				'S40',
+				'S60',
+				'S70',
+				'S80',
+				'S90',
+				'V40',
+				'V50',
+				'V70',
+				'V90',
+				'XC60',
+				'XC70',
+				'XC90'
+            ]
+          },
+          {
+            name: 'Volkswagen',
+            models: [
+				'Beetle',
+				'Cabriolet',
+				'CC',
+				'Corrado',
+				'Eos',
+				'Eurovan',
+				'Fox',
+				'GLI',
+				'Golf',
+				'Golf III',
+				'GTI',
+				'Jetta',
+				'Jetta III',
+				'New Beetle',
+				'Passat',
+				'Phaeton',
+				'Quantum',
+				'R32',
+				'Rabbit',
+				'rio',
+				'riolet',
+				'Routan',
+				'Scirocco',
+				'Tiguan',
+				'Touareg',
+				'Touareg 2',
+				'Type 2',
+				'Vanagon'
+            ]
+          }
+        ],
+                                combos: [
+          {
+            text: 'Trim Level',
+            id: 'wut1',
+            content: [
+                'Standard',
+                'Convenience',
+                'Leather'
+            ]
+          },
+          {
+            text: 'Engine Size',
+            id: 'enginesize',
+            content: [
+             '2.4 L DOHC 4-Cylinder Engine',
+             '3.6 L V-6 Engine'
+            ]
+          }
+        ],
+				pages: [
+          {
+            text: 'Powertrain',
+            id: 'wut2',
+            content: [
+              {
+                text: 'Manual Transmission',
+                id: 'content-value4'
+              },
+              {
+                text: 'Engine Block Heater',
+                id: 'content-value5'
+              },
+
+            ]
+          },
+          {
+            text: 'Exterior Options',
+            id: 'wut3',
+            content: [
+              {
+                text: 'Rear Spoiler',
+                id: 'content-value8'
+              },
+              {
+                text: 'Power MoonRoof',
+                id: 'content-value9'
+              },
+              {
+                text: 'Chrome Front Bumper Grill',
+                id: 'content-value10'
+              },
+              {
+                text: '18" Alloy Wheels',
+                id: 'content-value11'
+              },
+              {
+                text: 'Molded Splash Guards',
+                id: 'content-value12'
+              }
+            ]
+          },
+          {
+            text: 'Interior Options',
+            id: 'wut4',
+            content: [
+              {
+                text: 'Aluminum Sport Pedals',
+                id: 'content-value13'
+              },
+              {
+                text: 'Front Bucket Seats',
+                id: 'content-value14'
+              },
+              {
+                text: 'Molded All-Weather Floor Mats',
+                id: 'content-value15'
+              },
+              {
+                text: 'IntelliLink Technology',
+                id: 'content-value16'
+              }
+            ]
+          }          
+        ]
+      },
+      makeChanged: function() {
+        this.update('model');
+      }
+    });
+
+    var GenerateCarReport = Ractive.extend({
+      el: '#generate-car-report',
+      template: '#template-ractive-generate-car-report'
+    });
+
+    var GeneratedCarReport = Ractive.extend({
+      el: '#generated-car-report',
+      template: '#template-ractive-generated-car-report',
+      adapt: [ 'Backbone' ],
+      computed: {
+        Cars: {
+          get: function() {
+          var cars = this.get("allCars");
+          var options = window.searchOptions;
+          this.set('NewCar', options.Type == 'new');
+          var newCar = this.get('NewCar');
+          _.each(cars.models, function(car, index, list) {
+            var hide = false;
+            car.set('NewCar', newCar);
+            car.set('YearString', moment.unix(parseInt(car.get('Year'))).format('MM/DD/YYYY'));
+            car.set('AcquiredDateString', moment.unix(parseInt(car.get('AcquiredDate'))).format('MM/DD/YYYY'));
+            car.set('ManufacturedDateString', moment.unix(parseInt(car.get('ManufacturedDate'))).format('MM/DD/YYYY'));
+            var sellPrice = parseFloat(car.get('SellPrice')).format(2);
+            var dealerCost = parseFloat(car.get('DealerCost')).format(2);
+            if (sellPrice.length != 0) {
+              sellPrice = "$" + sellPrice;
+            } else {
+              sellPrice = "N/A";
+            }
+            if (dealerCost.length != 0) {
+              dealerCost = "$" + dealerCost;
+            } else {
+              dealerCost = "N/A";
+            }
+            car.set('SellPriceFormatted', sellPrice);
+            car.set('DealerCostFormatted', dealerCost);
+            _.each(options, function(value, key) {
+              if (typeof value == 'object') {
+                <!-- there is a range of values to check -->
+                var convertedValue;
+                var lte;
+                var gte;
+                if (value.type == 'digit') {
+                  convertedValue = parseFloat(car.get(key));
+                  lte = parseFloat(value.lte);
+                  gte = parseFloat(value.gte);
+                } else if (value.type == 'date') {
+                  convertedValue = moment(car.get(key)).unix();
+                  if (value.lte != undefined && value.lte != '') { 
+                    lte = moment(value.lte).unix();
+                  }
+                  if (value.gte != undefined && value.gte != '') { 
+                    gte = moment(value.gte).unix();
+                  }
+                }
+                if (car.get(key) == '') {
+                } else if (convertedValue == NaN && car.get(key) != NaN) {
+                  hide = true;
+                } else {
+                  if (lte != NaN) {
+                    if (convertedValue > lte) {
+                      hide = true
+                    }
+                  }
+                  if (gte != NaN) {
+                    if (convertedValue < gte) {
+                      hide = true
+                    }
+                  }
+                }
+              } else {
+                if (value != undefined && value != '' && value.trim().toLowerCase() != car.get(key).trim().toLowerCase()) {
+                  hide = true;
+                }
+              }
+            car.set('hide', hide);
+            });
+          });
+          var sortBy = this.get('sortColumn');
+          var sortOrder = this.get('sortOrder');
+          var lessThan = -1
+          var greaterThan = 1;
+          if (sortOrder == "up") {
+            lessThan = 1;
+            greaterThan = -1;
+          }
+          if (sortBy != NaN && sortBy != null) {
+            cars.comparator = function(left, right) {
+              var leftVal = left.get(sortBy)
+              var rightVal = right.get(sortBy);
+              if (sortBy == "Year" || sortBy == "SellPrice" || sortBy == "DealerCost") {
+                leftVal = parseFloat(leftVal);
+                rightVal = parseFloat(rightVal);
+              }
+              if (leftVal == rightVal) {
+                return 0;
+              } else if (leftVal < rightVal) {
+                return lessThan;
+              } else {
+                return greaterThan;
+              }
+            };
+            cars.sort();
+          }
+          return cars;
+        },
+        set: function(wut) {
+        }
+      }
+      }
+    });
+  </script>
+
+  <!-- END RACTIVE VIEWS -->
+
+
+
+  <!-- MARIONETTE TEMPLATES -->
+
+  <script id="template-marionette-index" type="text/template">
+    <div id="indexPage"></div>
+  </script>
+
+  <script id="template-marionette-loggedin" type="text/template">
+    <div id="header"></div>
+    <div class="container">
+      <div id="body">
+        <div class="page-header">
+          <h1>Welcome, Choose an Option from Above</h1>
+        </div>
+      </div>
+    </div>
+  </script>
+
+  <script id="template-marionette-nope" type="text/template">
+    NOPE THIS DONT WORK
+  </script>
+
+  <script id="template-marionette-customer-new" type="text/template">
+    <div class="page-header">
+      <h1>Create a New Customer Account</h1>
+    </div>
+    <div class="col-xs-6" style="float: none; margin-left: auto; margin-right: auto;">
+    <div id="customer-data">
+    </div>
+    <button type="submit" class="btn btn-default pull-left" id="cancel-create-customer">Cancel</button>
+    <button type="submit" class="btn btn-primary pull-right" id="create-customer">Create Customer</button>
+    </div>
+  </script>
+
+  <script id="template-marionette-customer-list" type="text/template">
+    <div class="page-header">
+      <h1>Update Customer Account</h1>
+    </div>
+    <div class="col-xs-6" style="float: none; margin-left: auto; margin-right: auto;">
+      <strong>Search by Customer Name</strong>
+      <div id="scrollable-dropdown-menu" class="input-group col-xs-4">
+	<input type="input" id="customer-search" class="typeahead form-control" style="width: 100%" placeholder="Customer name">
+      </div>
+      <div id="customer-list"></div>
+      <div id="customer-data"></div>
+      <button type="submit" class="btn btn-default pull-left" id="cancel-update-customer">Cancel</button>
+      <button type="submit" class="btn btn-primary pull-right" id="update-customer">Update Customer</button>
+    </div>
+  </script>
+
+  <script id="template-marionette-car-report" type="text/template">
+    <div class="page-header">
+      <h1>Generate an Inventory Report</h1>
+    </div>
+    <div class="col-xs-6" style="float: none; margin-left: auto; margin-right: auto;">
+      <div id="generate-car-report">
+      </div>
+      <button type="submit" class="btn btn-default pull-left" id="cancel-generate-report">Cancel</button>
+      <button type="submit" class="btn btn-primary pull-right" id="generate-report">Generate Report</button>
+    </div>
+  </script>
+
+  <script id="template-marionette-generated-car-report" type="text/template">
+    <div class="page-header">
+      <h1>Inventory - Available for Sale</h1>
+    </div>
+    <div id="generated-car-report">
+    </div>
+    <button type="submit" class="btn btn-default pull-left noprint" id="back">Back</button>
+    <button type="submit" class="btn btn-primary pull-right noprint" onClick="window.print();">Print</button>
+  </script>
+
+  <script id="template-marionette-new-car" type="text/template">
+    <div class="page-header">
+      <h1>Create a New Car</h1>
+    </div>
+    <div class="col-xs-6" style="float: none; margin-left: auto; margin-right: auto;">
+      <div id="car-data">
+      </div>
+      <button type="submit" class="btn btn-default pull-left" id="cancel-new-car">Cancel</button>
+      <button type="submit" class="btn btn-primary pull-right" id="new-car">Create Car</button>
+    </div>
+  </script>
+
+  <!-- END MARIONETTE TEMPLATES -->
+
+  <!-- VIEWS -->
+  <script>
+
+  <!-- MARIONETTE VIEWS -->
+  var IndexPageView = Marionette.ItemView.extend({
+    template: "#template-marionette-index",
+    onShow: function() {
+      window.ractiveIndex = new RactiveIndex();
+    },
+    events: {
+      'click #login-btn': 'login'
+    },
+    login: function(e) {
+      e.preventDefault();
+      <!-- grab what user we are and store it somewhere -->
+      window.user = $("#login-user").val();
+      window.loggedIn = true;
+      App.router.navigate("#home", {trigger: true});
+      return false;
+    }
+  });
+
+  var LoggedInView = Marionette.ItemView.extend({
+    template: "#template-marionette-loggedin",
+    onShow: function() {
+      if (window.bugTriggered == true) {
+        <!--location.reload();-->
+      }
+      window.bugTriggered = true;
+      new RactiveLoggedIn();
+      new RactiveHeader();
+    }
+  });
+
+  var NopeView = Marionette.ItemView.extend({
+    template: "#template-marionette-nope"
+  });
+
+  var showModal = function(title, body, onClickFunction) {
+    $('#customer-data-modal-title').html(title);
+    $('#customer-data-modal-body').html(body);
+    $('#customer-data-modal').modal('show');
+    if (onClickFunction !== null && onClickFunction !== undefined) {
+      if (window.customerDataModalOkFunction !== null && window.customerDataModalOkFunction !== undefined) {
+        $('#customer-data-modal-ok').off(window.customerDataModalOkFunction);
+      }
+      $('#customer-data-modal-ok').click(onClickFunction);
+      window.customerDataModalOkFunction = onClickFunction;
+    }
+  };
+
+  var hideModal = function(title, body) {
+    $('#customer-data-modal').modal('hide');
+  };
+
+  var NewCustomerAccountView = Marionette.ItemView.extend({
+    template: "#template-marionette-customer-new",
+    events: {
+      'click #create-customer': 'create',
+      'click #cancel-create-customer': 'cancel'
+    },
+    onShow: function() {
+      new RactiveCustomerData();
+      $("#form-customer-data").parsley({
+        successClass: 'has-success',
+        errorClass: 'has-error',
+        classHandler: function(el) {
+          return el.$element.closest(".form-error");
+        }
+      });
+    },
+    cancel: function(e) {
+      App.router.navigate('#home', {trigger: true});
+    },
+    create: function(e) {
+      e.preventDefault();
+      if (!$('#form-customer-data').parsley().validate()) {return;}
+      var newCustomerData = {
+        FirstName: $("#FirstName").val(),
+        MiddleName: $("#MiddleName").val(),
+        LastName: $("#LastName").val(),
+        StreetAddress: $("#StreetAddress").val(),
+        PhoneNumber: $("#PhoneNumber").val(),
+        ZipCode: $("#ZipCode").val(),
+        City: $("#City").val(),
+        State: $("#State").val(),
+        Email: $("#Email").val(),
+        Notes: $("#Notes").val()
+      };
+      var newCustomer = new CustomerModel(newCustomerData);
+      newCustomer.save(null, {
+        success: function() {
+          showModal("Success", "A new customer was successfully created", function() {App.router.navigate("#home", {trigger: true})});
+        },
+        error: function() {
+          showModal("Error", "Failed to create a new customer", function() {App.router.navigate("#home", {trigger: true})});
+        }
+      });
+    }
+  });
+
+  var CustomerListView = Marionette.ItemView.extend({
+    template: "#template-marionette-customer-list",
+    initialize: function() {
+      _.bindAll(this, 'onShow');
+    },
+    events: {
+      'click #update-customer': 'update',
+      'click #cancel-update-customer': 'cancel',
+      'typeahead:selected #customer-search': 'selected'
+    },
+    onShow: function() {
+      window.customerListViewCollection = this.collection;
+      $('#update-customer').hide();
+      $('#cancel-update-customer').hide();
+
+      if (false) {
+      <!-- generates select box of customers, we use search now -->
+      var ractive = new RactiveCustomerList({
+        data: {
+          customers: this.collection
+        }
+      });
+      }
+
+      var customers = this.collection;
+
+      var searchDemCustomers = function(query, callback) {
+        var matches = [];
+        <!-- global variable use lol -->
+        window.matches = {};
+        window.matchesHash = {};
+        var matchesIds = [];
+	var countOfMatches = 0;
+        var substringRegex = new RegExp(query, 'i');
+        $.each(customers.models, function(i, customer) {
+          var id = customer.id;
+          $.each(customer.attributes, function(key, value) {
+            if (substringRegex.test(value)) {
+              var name = customer.get('FirstName') + " " + customer.get('LastName') + " (ID: " + id + ")";
+              if ($.inArray(id, matchesIds) < 0) {
+                matches.push({value: name, customer: customer});
+                window.matches[countOfMatches++] = customer;
+                window.matchesHash[name] = customer;
+                matchesIds.push(id);
+              }
+            }
+          });
+        });
+
+        callback(matches);
+      };
+
+      $('#customer-search').typeahead({
+        hint: true,
+        highlight: true,
+        minLength: 1
+      },{
+        name: 'wut',
+        displayKey: 'value',
+        source: searchDemCustomers
+      });
+
+      selectedFunction = function() {
+        var customerToEdit;
+        var selected = $("#customer-to-edit").val();
+        var customerUpdateButton = $("#update-customer");
+        var cancelUpdate = $("#cancel-update-customer");
+        if (selected === null) {
+          customerUpdateButton.hide();
+          cancelUpdate.hide();
+          return;
+        } else {
+          customerUpdateButton.show();
+          cancelUpdate.show();
+        }
+        if (false) {
+        var customers = ractive.get('customers');
+        }
+
+        var customerToEdit = new CustomerModel({CustomerID: selected});
+        customerToEdit.fetch({
+          success: function() {
+            console.log("Successfully retrieve customer from server");
+          },
+          error: function() {
+            showModal("Failure", "Failed to retrieve customers from server", function() {App.router.navigate("#", {trigger: true})});
+          }
+        });
+        <!-- screw it, global variable dont want to deal with binding methods -->
+        window.customerListViewCustomer = customerToEdit;
+
+        var customerDataRactive = new RactiveCustomerData({
+          data: {
+            customer: customerToEdit
+          }
+        });
+        window.customerDataRactive = customerDataRactive;
+	$("#form-customer-data").parsley({
+          successClass: 'has-success',
+          errorClass: 'has-error',
+          classHandler: function(el) {
+            return el.$element.closest(".form-error");
+          }
+        });
+      };
+      if (false) {
+      ractive.on({
+        selected: selectedFunction
+      });
+      selectedFunction();
+      }
+    },
+    cancel: function(e) {
+      e.preventDefault();
+      window.customerDataRactive.set("Hide", true);
+      $('#cancel-update-customer').hide();
+      $('#update-customer').hide();
+      $('#customer-search').val('');
+    },
+    update: function(e) {
+      e.preventDefault();
+      if (!$('#form-customer-data').parsley().validate()) {return;}
+      var customerData = window.customerListViewCustomer;
+      customerData.save(null, {
+	type: 'POST'
+      }, {
+	success: function() {
+          console.log("CUSTOMER UPDATED!?");
+          showModal("Success", "Successfully update customer", null);
+	  window.customerListViewCollection.fetch({
+            error: function() {
+	      showModal("Failure", "Failed to fetch customers from server", function() {App.router.navigate("#customer-new", {trigger: true})});
+	    }
+	  });
+	},
+	error: function() {
+	  showModal("Failure", "Failed to update customer", null);
+	}
+      });
+    },
+    selected: function(obj, datum, name) {
+      window.customerListViewCustomer = datum['customer'];
+      var customerDataRactive = new RactiveCustomerData({
+        data: {
+          customer: datum['customer']
+        }
+      });
+      window.customerDataRactive = customerDataRactive;
+        var selected = $("#customer-to-edit").val();
+        var customerUpdateButton = $("#update-customer");
+        var cancelCustomer = $("#cancel-update-customer");
+        if (selected === null) {
+          customerUpdateButton.hide();
+          cancelCustomer.hide();
+          return;
+        } else {
+          customerUpdateButton.show();
+          cancelCustomer.show();
+        }
+	$("#form-customer-data").parsley({
+          successClass: 'has-success',
+          errorClass: 'has-error',
+          classHandler: function(el) {
+            return el.$element.closest(".form-error");
+          }
+        });
+    }
+  });
+
+  var NewCarView = Marionette.ItemView.extend({
+    template: "#template-marionette-new-car",
+    onShow: function() {
+      var newCar = new RactiveNewCar();
+      window.newCar = newCar;
+      newCar.observe('Make', function (newValue, oldValue) {
+	var newMakes = newCar.get('newMakes');
+	var usedMakes = newCar.get('usedMakes');
+	_.each([newMakes, usedMakes], function(makes, index, list) {
+	  for (var i = 0; i < makes.length; i++) {
+            if (makes[i].name == newValue) {
+              newCar.set('models', makes[i].models);
+              break;
+            }
+          }
+        });
+      });
+      newCar.observe('Type', function(newValue, oldValue) {
+        if (newValue == 'new') {
+          newCar.set('Manufacturer', true);
+          $('#car-manufactured-date').datepicker();
+        } else {
+          newCar.set('Manufacturer', null);
+        }
+      });
+      $('#car-acquired-date').datepicker();
+      $('#car-manufactured-date').datepicker();
+      $('#form-new-car').parsley({
+        successClass: 'has-success',
+        errorClass: 'has-error',
+        classHandler: function(el) {
+          return el.$element.closest(".form-error");
+        }
+      });
+    },
+    events: {
+      'click #new-car': 'create',
+      'click #cancel-new-car': 'cancel'
+    },
+    cancel: function(e) {
+      App.router.navigate('#home', {trigger: true});
+    },
+    create: function(e) {
+      e.preventDefault();
+      if (!$('#form-new-car').parsley().validate()) {return;}
+      var pages = window.newCar.get('pages');
+      var options = '';
+      _.each(pages, function(page, index, list) {
+        _.each(page.content, function(option, index, list) {
+          if ($('#' + option.id).is(':checked')) {
+            options += option.text + ';';
+          }
+        });
+      });
+      var combos = window.newCar.get('combos');
+      _.each(combos, function(combo, index, list) {
+        var id = combo.id;
+        options += $("#" + id).val() + ';';
+      });
+      var newCar = {
+        Type: $("#car-type").val(),
+        VIN: $("#car-vin").val(),
+        Make: $("#car-make").val(),
+        Model: $("#car-model").val(),
+        Year: $("#car-year").val(),
+        ExteriorColor: $("#car-exterior").val(),
+        InteriorColor: $("#car-interior").val(),
+        DealerCost: $("#car-dealer-price").val(),
+        SellPrice: $("#car-sell-price").val(),
+        AcquiredDate: moment($("#car-acquired-date").val()).unix(),
+        ManufacturedDate: moment($("#car-acquired-date").val()).unix(),
+        Mileage: $("#car-mileage").val(),
+        Options: options,
+        Status: 'Received'
+      };
+
+      var newCar = new CarModel(newCar);
+      newCar.save(null, {
+        success: function() {
+          showModal("Success", "A new car was successfully created", function() {
+            App.router.navigate("#home", {trigger: true})
+          });
+        },
+        error: function() {
+          showModal("Error", "Failed to create a new car", function() {
+
+          });
+        }
+      });
+    }
+  });
+
+  var CarReportView = Marionette.ItemView.extend({
+    template: "#template-marionette-car-report",
+    initialize: function() {
+      _.bindAll(this, 'onShow');
+    },
+    events: {
+      'click #generate-report': 'generate',
+      'click #cancel-generate-report': 'cancel'
+    },
+    onShow: function() {
+      window.CarReportViewCollection = this.collection;
+      var generateReport = new GenerateCarReport();
+      generateReport.observe("Type", function(newValue, oldValue) {
+        generateReport.set("NewCar", newValue == "new");
+        if (newValue == "new") {
+          $('#car-manufacturer-date-from').datepicker();
+          $('#car-manufacturer-date-to').datepicker();
+        }
+      });
+      generateReport.on("change", function() {
+        window.setTimeout(function() {
+        $('#car-manufacturer-date-from').datepicker();
+        $('#car-manufacturer-date-to').datepicker();
+        $('#car-acquired-date-from').datepicker();
+        $('#car-acquired-date-to').datepicker();
+        }, 200);
+      });
+        $('#car-manufacturer-date-from').datepicker();
+        $('#car-manufacturer-date-to').datepicker();
+        $('#car-acquired-date-from').datepicker();
+        $('#car-acquired-date-to').datepicker();
+
+	$("#form-generate-car").parsley({
+          successClass: 'has-success',
+          errorClass: 'has-error',
+          classHandler: function(el) {
+            return el.$element.closest(".form-error");
+          }
+        });
+    },
+    cancel: function(e) {
+      App.router.navigate("#home", {trigger: true});
+    },
+    generate: function(e) {
+      e.preventDefault();
+      if (!$('#form-generate-car').parsley().validate()) {return;}
+      var manuFrom = $('#car-manufacturer-date-from').val();
+      var manuTo = $('#car-manufacturer-date-to').val();
+      var acquiredFrom = $('#car-acquired-date-from').val();
+      var acquiredTo = $('#car-acquired-date-to').val();
+      if (manuFrom != '' && manuFrom !== undefined) {
+        manuFrom = moment(manuFrom).unix();
+      }
+      if (manuTo != '' && manuTo !== undefined) {
+        manuTo = moment(manuTo).unix();
+      }
+      if (acquiredFrom != '' && acquiredFrom !== undefined) {
+        acquireFrom = moment(acquiredFrom).unix();
+      }
+      if (acquiredTo != '' && acquiredTo !== undefined) {
+        acquiredTo = moment(acquiredTo).unix();
+      }
+
+      var searchOptions = {
+        'Type': $('#car-type').val(),
+        'ManufacturedDate': {
+          type: 'date',
+          gte: manuFrom,
+          lte: manuTo
+        },
+        'Make': $('#car-make').val(),
+        'Model': $('#car-model').val(),
+        'Mileage': {
+          type: 'digit',
+          gte: $('#car-mileage-from').val(),
+          lte: $('#car-mileage-to').val()
+        },
+        'DealerCost': {
+          type: 'digit',
+          gte: $('#car-dealer-cost-from').val(),
+          lte: $('#car-dealer-cost-to').val()
+        },
+        'SellPrice': {
+          type: 'digit',
+          gte: $('#car-sell-price-from').val(),
+          lte: $('#car-sell-price-to').val()
+        },
+        'Year': {
+          type: 'digit',
+          gte: $('#car-year-from').val(),
+          lte: $('#car-year-to').val()
+        },
+        'AcquiredDate': {
+          type: 'date',
+          gte: acquiredFrom,
+          lte: acquiredTo
+        },
+        'ExteriorColor': $('#car-exterior-color').val(),
+        'InteriorColor': $('#car-interior-color').val()
+      };
+      window.searchOptions = searchOptions;
+      App.router.navigate("#show-car-report", {trigger: true});
+    }
+  });
+
+  var GeneratedCarReportView = Marionette.ItemView.extend({
+    template: "#template-marionette-generated-car-report",
+    initialize: function() {
+      _.bindAll(this, 'onShow');
+    },
+    events: {
+      'click #generate-report': 'generate',
+      'click #back': 'back'
+    },
+    onShow: function() {
+      var generatedReport = new GeneratedCarReport({data: {
+        allCars: window.CarReportViewCollection
+      }});
+      generatedReport.observe("Type", function(newValue, oldValue) {
+        generatedReport.set("NewCar", newValue == "new");
+        if (newValue == "new") {
+          $('#car-manufacturer-date-from').datepicker();
+          $('#car-manufacturer-date-to').datepicker();
+        }
+      });
+      generatedReport.on('sort', function(event, column) {
+        var currentColumn = generatedReport.get('sortColumn');
+        var currentOrder = generatedReport.get('sortOrder');
+        if (currentColumn != column) {
+          generatedReport.set('sortOrder', 'down');
+        } else if (currentOrder == 'down') {
+          generatedReport.set('sortOrder', 'up');
+        } else {
+          generatedReport.set('sortOrder', 'down');
+        }
+        generatedReport.set('sortColumn', column);
+      });
+    },
+    back: function() {
+      App.router.navigate("#car-report", {trigger: true});
+    }
+  });
+
+  <!-- END MARIONETTE VIEWS -->
+
+  <!-- MARIONETTE REGIONS -->
+
+  var ContentRegion = Marionette.Region.extend({
+    el: "#content"
+  });
+
+  var BodyRegion = Marionette.Region.extend({
+    el: "#body"
+  });
+  
+  <!-- END MARIONETTE REGIONS -->
+  
+  <!-- Marionette application -->
+  
+  App = {};
+  App.core = new Marionette.Application();
+  App.core.addRegions({
+    contentRegion: ContentRegion,
+    bodyRegion: BodyRegion
+  });
+  
+
+  <!-- BACKBONE ROUTES/CONTROLLER -->
+
+  window.goHome = function() {
+    if (window.user === undefined) {
+      <!-- not logged in, go home -->
+      App.router.navigate("#", {trigger: true});
+      return true;
+    }
+    return false;
+  }
+
+  var Controller = Marionette.Controller.extend({
+    home: function() {
+      if (window.bugTriggered) {
+        <!--location.reload();-->
+      }
+      App.core.contentRegion.reset();
+      App.core.contentRegion.show(new IndexPageView());
+      App.router.navigate("#");
+      if (window.loggedIn && window.updatingLogin != true) {
+        window.updatingLogin = true;
+        setTimeout(function() {
+          window.loggedIn = false;
+          window.updatingLogin = false;
+          window.ractiveIndex.update('loggedIn');
+        }, 5000);
+      }
+    },
+    loggedIn: function() {
+      if (window.goHome()) {return;}
+      console.log("loggedIn");
+      App.core.contentRegion.reset();
+      App.core.contentRegion.show(new LoggedInView());
+      App.router.navigate("#home");
+    },
+    nope: function() {
+      if (window.goHome()) {return;}
+      console.log("nope");
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new NopeView());
+      App.router.navigate("#nope");
+    },
+    customer: function() {
+      if (window.goHome()) {return;}
+      this.loggedIn();
+      console.log("customer");
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new CustomerAccountView());
+      App.router.navigate("#customer");
+    },
+    customerNew: function() {
+      if (window.goHome()) {return;}
+      console.log("customerNew");
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new NewCustomerAccountView());
+      App.router.navigate("#customer-new");
+    },
+    customerEdit: function() {
+      if (window.goHome()) {return;}
+      console.log("customerEdit");
+      var customers = new CustomerCollection();
+      customers.fetch({
+        success: function() {
+          console.log("Successfully fetched customers from server");
+        },
+        error: function() {
+          console.log("Failed to fetch customers from server");
+          window.alert("Failed to retrieve customers from server");
+          App.router.navigate("#", {trigger: true});
+        }
+      });
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new CustomerListView({collection: customers}));
+      App.router.navigate("#customer-edit");
+    },
+    newCar: function() {
+      if (window.goHome()) {return;}
+      console.log("newCar");
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new NewCarView());
+      App.router.navigate("#new-car");
+    },
+    carReport: function() {
+      if (window.goHome()) {return;}
+      console.log("carReport");
+      var cars = new CarCollection();
+      cars.fetch({
+        success: function() {
+          console.log("Successfully fetched cars from server");
+        },
+        error: function() {
+          console.log("Failed to fetch cars from server");
+          window.alert("Failed to retrieve cars from server");
+          App.router.navigate("#", {trigger: true});
+        }
+      });
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new CarReportView({collection: cars}));
+      App.router.navigate("#car-report"); 
+    },
+    showCarReport: function() {
+      if (window.goHome()) {return;}
+      console.log("showCarReport");
+      if (window.CarReportViewCollection === null ||
+          window.CarReportViewCollection === undefined ||
+          window.searchOptions === null ||
+          window.searchOptions === undefined) {
+<!--        App.router.navigate("#car-report", {trigger: true}); -->
+<!--        return; -->
+          window.searchOptions = {
+            'Type': 'new'
+          };
+      }
+      App.core.bodyRegion.reset();
+      App.core.bodyRegion.show(new GeneratedCarReportView({collection: window.CarReportCollection}));
+      App.router.navigate("#show-car-report");
+    }
+  });
+
+  App.controller = new Controller();
+
+  var Router = Marionette.AppRouter.extend({
+    appRoutes: {
+      <!-- Login page -->
+      "":"home",
+      <!-- Home page -->
+      "home": "loggedIn",
+      <!-- Page not implemented -->
+      "nope": "nope",
+      <!-- New Customer account -->
+      "customer-new": "customerNew",
+      <!-- List of all customer accounts -->
+      "customer-edit": "customerEdit",
+      <!-- Create a new car -->
+      "new-car": "newCar",
+      <!-- Car report -->
+      "car-report": "carReport",
+      <!-- Generated report -->
+      "show-car-report": "showCarReport"
+    }
+  });
+
+  App.router = new Router({controller: App.controller});
+  Backbone.history.start();
+
+  <!-- END BACKBONE ROUTES -->
+  </script>
+  <!-- END VIEWS -->
+
+</body>
+</html>
